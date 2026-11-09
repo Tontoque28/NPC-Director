@@ -1,0 +1,229 @@
+package com.tontoque28.npcdirector.command;
+
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.tontoque28.npcdirector.admin.AdminService;
+import com.tontoque28.npcdirector.config.ModConfig;
+import com.tontoque28.npcdirector.data.NpcProfile;
+import com.tontoque28.npcdirector.data.QuestRelevance;
+import com.tontoque28.npcdirector.dialogue.DialogueManager;
+import com.tontoque28.npcdirector.entity.QuestNpcEntity;
+import com.tontoque28.npcdirector.util.DebugLog;
+import com.tontoque28.npcdirector.waypoint.WaypointPathManager;
+import net.minecraft.command.CommandSource;
+import net.minecraft.command.Commands;
+import net.minecraft.command.arguments.EntityArgument;
+import net.minecraft.util.text.StringTextComponent;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.player.ServerPlayerEntity;
+
+public class DevCommands {
+
+	public static void register(CommandDispatcher<CommandSource> dispatcher) {
+		dispatcher.register(Commands.literal("npcdirector")
+				.requires(source -> source.hasPermission(2))
+				.then(Commands.literal("mode")
+						.then(Commands.literal("dev").executes(ctx -> setMode(ctx.getSource(), true)))
+						.then(Commands.literal("player").executes(ctx -> setMode(ctx.getSource(), false))))
+				.then(Commands.literal("debug")
+						.then(Commands.literal("on").executes(ctx -> setDebug(ctx.getSource(), true)))
+						.then(Commands.literal("off").executes(ctx -> setDebug(ctx.getSource(), false)))
+						.then(Commands.literal("log").executes(DevCommands::showLog))
+						.then(Commands.literal("clear").executes(DevCommands::clearLog)))
+				.then(Commands.literal("gui")
+						.executes(DevCommands::guiLooked)
+						.then(Commands.argument("target", EntityArgument.entity())
+								.executes(DevCommands::guiTarget)))
+				.then(Commands.literal("npc")
+						.then(Commands.argument("target", EntityArgument.entity())
+								.then(Commands.literal("name")
+										.then(Commands.argument("value", StringArgumentType.greedyString())
+												.executes(ctx -> npcName(ctx.getSource(),
+														EntityArgument.getEntity(ctx, "target"),
+														StringArgumentType.getString(ctx, "value")))))
+								.then(Commands.literal("relevance")
+										.then(Commands.literal("none").executes(ctx -> npcRelevance(ctx.getSource(), EntityArgument.getEntity(ctx, "target"), QuestRelevance.NONE)))
+										.then(Commands.literal("indirect").executes(ctx -> npcRelevance(ctx.getSource(), EntityArgument.getEntity(ctx, "target"), QuestRelevance.INDIRECT)))
+										.then(Commands.literal("main").executes(ctx -> npcRelevance(ctx.getSource(), EntityArgument.getEntity(ctx, "target"), QuestRelevance.MAIN))))
+								.then(Commands.literal("targetable")
+										.then(Commands.argument("value", BoolArgumentType.bool())
+												.executes(ctx -> npcTargetable(ctx.getSource(),
+														EntityArgument.getEntity(ctx, "target"),
+														BoolArgumentType.getBool(ctx, "value")))))
+								.then(Commands.literal("path")
+										.then(Commands.argument("value", StringArgumentType.greedyString())
+												.executes(ctx -> npcPath(ctx.getSource(),
+														EntityArgument.getEntity(ctx, "target"),
+														StringArgumentType.getString(ctx, "value")))))
+								.then(Commands.literal("dialogue")
+										.then(Commands.argument("value", StringArgumentType.greedyString())
+												.executes(ctx -> npcDialogue(ctx.getSource(),
+														EntityArgument.getEntity(ctx, "target"),
+														StringArgumentType.getString(ctx, "value")))))))
+				.then(Commands.literal("quest")
+						.then(Commands.literal("set")
+								.then(Commands.argument("questId", StringArgumentType.string())
+										.then(Commands.argument("state", StringArgumentType.string())
+												.executes(ctx -> questSetGlobal(ctx.getSource(),
+														StringArgumentType.getString(ctx, "questId"),
+														StringArgumentType.getString(ctx, "state")))
+												.then(Commands.argument("player", EntityArgument.player())
+														.executes(ctx -> questSetPlayer(ctx.getSource(),
+																EntityArgument.getPlayer(ctx, "player"),
+																StringArgumentType.getString(ctx, "questId"),
+																StringArgumentType.getString(ctx, "state")))))))
+						.then(Commands.literal("get")
+								.then(Commands.argument("questId", StringArgumentType.string())
+										.executes(ctx -> questGetGlobal(ctx.getSource(),
+												StringArgumentType.getString(ctx, "questId")))
+										.then(Commands.argument("player", EntityArgument.player())
+												.executes(ctx -> questGetPlayer(ctx.getSource(),
+														EntityArgument.getPlayer(ctx, "player"),
+														StringArgumentType.getString(ctx, "questId")))))))
+		);
+	}
+
+	private static com.tontoque28.npcdirector.quest.QuestManager questManager(CommandSource source) {
+		return com.tontoque28.npcdirector.quest.QuestManager.get(source.getLevel());
+	}
+
+	private static int questSetGlobal(CommandSource source, String questId, String state) {
+		questManager(source).setGlobalState(questId, state);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Quest global " + questId + " = " + state), true);
+		DebugLog.action("quest global set: " + questId + "=" + state);
+		return 1;
+	}
+
+	private static int questSetPlayer(CommandSource source, ServerPlayerEntity player, String questId, String state) {
+		questManager(source).setPlayerState(player.getUUID(), questId, state);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Quest " + questId + " = " + state + " para " + player.getName().getString()), true);
+		DebugLog.action("quest player set: " + player.getName().getString() + " " + questId + "=" + state);
+		return 1;
+	}
+
+	private static int questGetGlobal(CommandSource source, String questId) {
+		String state = questManager(source).getGlobalState(questId);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] " + questId + " (global) = " + state), false);
+		return 1;
+	}
+
+	private static int questGetPlayer(CommandSource source, ServerPlayerEntity player, String questId) {
+		String state = questManager(source).getPlayerState(player.getUUID(), questId);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] " + questId + " (" + player.getName().getString() + ") = " + state), false);
+		return 1;
+	}
+
+	private static QuestNpcEntity asNpc(CommandSource source, Entity entity) {
+		if (!(entity instanceof QuestNpcEntity)) {
+			source.sendFailure(new StringTextComponent("[NPCDirector] El objetivo no es un NPC de este mod"));
+			return null;
+		}
+		return (QuestNpcEntity) entity;
+	}
+
+	private static int npcName(CommandSource source, Entity entity, String value) {
+		QuestNpcEntity npc = asNpc(source, entity);
+		if (npc == null) return 0;
+		NpcProfile profile = npc.getProfile();
+		profile.setDisplayName(value);
+		npc.setProfile(profile);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Nombre: " + value), true);
+		DebugLog.action("npc name set: " + value);
+		return 1;
+	}
+
+	private static int npcRelevance(CommandSource source, Entity entity, QuestRelevance relevance) {
+		QuestNpcEntity npc = asNpc(source, entity);
+		if (npc == null) return 0;
+		NpcProfile profile = npc.getProfile();
+		profile.setQuestRelevance(relevance);
+		npc.setProfile(profile);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Relevancia: " + relevance), true);
+		DebugLog.action("npc relevance set: " + relevance);
+		return 1;
+	}
+
+	private static int npcTargetable(CommandSource source, Entity entity, boolean value) {
+		QuestNpcEntity npc = asNpc(source, entity);
+		if (npc == null) return 0;
+		npc.getProfile().setTargetableByHostiles(value);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Targetable por hostiles: " + value), true);
+		DebugLog.action("npc targetable set: " + value);
+		return 1;
+	}
+
+	private static int npcPath(CommandSource source, Entity entity, String value) {
+		QuestNpcEntity npc = asNpc(source, entity);
+		if (npc == null) return 0;
+		npc.getProfile().setAssignedPathId(value);
+		npc.setPatrolIndex(0);
+		npc.setPatrolIdleTicks(-1);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Camino asignado: " + value), true);
+		if (WaypointPathManager.get(value) == null) {
+			source.sendFailure(new StringTextComponent("[NPCDirector] Aviso: el camino " + value + " no esta cargado"));
+		}
+		DebugLog.action("npc path set: " + value);
+		return 1;
+	}
+
+	private static int npcDialogue(CommandSource source, Entity entity, String value) {
+		QuestNpcEntity npc = asNpc(source, entity);
+		if (npc == null) return 0;
+		npc.getProfile().setAssignedDialogueId(value);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Diálogo asignado: " + value), true);
+		if (DialogueManager.get(value) == null) {
+			source.sendFailure(new StringTextComponent("[NPCDirector] Aviso: el dialogo " + value + " no esta cargado"));
+		}
+		DebugLog.action("npc dialogue set: " + value);
+		return 1;
+	}
+
+	private static int guiLooked(com.mojang.brigadier.context.CommandContext<CommandSource> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+		ServerPlayerEntity player = ctx.getSource().getPlayerOrException();
+		QuestNpcEntity npc = AdminService.lookedAt(player);
+		if (npc == null) {
+			AdminService.openSummonPanel(player);
+			ctx.getSource().sendFailure(new StringTextComponent("[NPCDirector] No hay ningun NPC a la vista a menos de 6 bloques"));
+			return 0;
+		}
+		AdminService.openFor(player, npc);
+		return 1;
+	}
+
+	private static int guiTarget(com.mojang.brigadier.context.CommandContext<CommandSource> ctx) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+		ServerPlayerEntity player = ctx.getSource().getPlayerOrException();
+		Entity entity = EntityArgument.getEntity(ctx, "target");
+		QuestNpcEntity npc = asNpc(ctx.getSource(), entity);
+		if (npc == null) {
+			return 0;
+		}
+		AdminService.openFor(player, npc);
+		return 1;
+	}
+
+	private static int setMode(CommandSource source, boolean dev) {
+		ModConfig.setDevMode(dev);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Modo: " + (dev ? "developer" : "player")), true);
+		DebugLog.action("mode set to " + (dev ? "dev" : "player"));
+		return 1;
+	}
+
+	private static int setDebug(CommandSource source, boolean enabled) {
+		DebugLog.setEnabled(enabled);
+		source.sendSuccess(new StringTextComponent("[NPCDirector] Debug log: " + enabled), true);
+		return 1;
+	}
+
+	private static int showLog(com.mojang.brigadier.context.CommandContext<CommandSource> ctx) {
+		DebugLog.recent(20).forEach(line -> ctx.getSource().sendSuccess(new StringTextComponent(line), false));
+		return 1;
+	}
+
+	private static int clearLog(com.mojang.brigadier.context.CommandContext<CommandSource> ctx) {
+		DebugLog.clear();
+		ctx.getSource().sendSuccess(new StringTextComponent("[NPCDirector] Log limpiado"), true);
+		return 1;
+	}
+}
+
