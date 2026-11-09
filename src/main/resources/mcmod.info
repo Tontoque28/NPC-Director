@@ -1,0 +1,11 @@
+[
+  {
+    "modid": "npcdirector",
+    "name": "NPC Director",
+    "description": "NPC scripting and dialogue framework for adventure maps.",
+    "version": "0.2.0",
+    "mcversion": "1.12.2",
+    "authorList": ["Tontoque28"],
+    "logoFile": "icon.png"
+  }
+]
