@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[54,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="npcdirector"
+version="0.2.0"
+displayName="NPC Director"
+logoFile="META-INF/icon.png"
+credits="Tontoque28"
+authors="Tontoque28"
+
+description='''NPC scripting and dialogue framework for adventure maps.'''
+
+[[dependencies.npcdirector]]
+    modId="forge"
+    mandatory=true
+    versionRange="[54,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.npcdirector]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.21.4,1.22)"
+    ordering="NONE"
+    side="BOTH"
