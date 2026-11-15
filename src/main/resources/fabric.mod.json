@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "npcdirector",
+  "version": "${version}",
+  "name": "NPC Director",
+  "description": "NPC scripting and dialogue framework for adventure maps.",
+  "authors": [
+    "Tontoque28"
+  ],
+  "license": "All Rights Reserved",
+  "icon": "assets/npcdirector/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.tontoque28.npcdirector.NpcDirector"
+    ],
+    "client": [
+      "com.tontoque28.npcdirector.client.NpcDirectorClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "~1.16.5",
+    "java": ">=8",
+    "fabric": "*"
+  }
+}
