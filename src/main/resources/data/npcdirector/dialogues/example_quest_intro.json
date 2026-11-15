@@ -1,0 +1,43 @@
+{
+  "nodes": [
+    {
+      "id": "start_after_started",
+      "text": "Back already? Did you find the outpost?",
+      "requires": { "quest": "example_quest", "state": "started" },
+      "options": [
+        {
+          "text": "Yes, it's clear.",
+          "setQuest": { "quest": "example_quest", "state": "completed" },
+          "commands": [ "say Quest completed" ]
+        },
+        {
+          "text": "Not yet."
+        }
+      ]
+    },
+    {
+      "id": "start_default",
+      "text": "Halt. State your business.",
+      "options": [
+        {
+          "text": "I need supplies.",
+          "next": "give_supplies",
+          "setQuest": { "quest": "example_quest", "state": "started" }
+        },
+        {
+          "text": "Nevermind."
+        }
+      ]
+    },
+    {
+      "id": "give_supplies",
+      "text": "Here, take these.",
+      "options": [
+        {
+          "text": "Thanks.",
+          "commands": [ "give @p minecraft:bread 4" ]
+        }
+      ]
+    }
+  ]
+}
